@@ -1,83 +1,174 @@
-# Brightloop Billing — Subscription Management System
+# Subscription Management & Billing System
 
-One web app that runs a subscription business end to end: products and plans, quotations that become
-subscriptions, automatic recurring invoices with taxes and discounts, payments, a customer self-service
-portal and a finance dashboard. Built for the "Subscription Management System" problem statement
-(Brightloop Software).
+A comprehensive, production-grade subscription management and recurring billing platform built for modern B2B/B2C SaaS and service enterprises. The application unifies product catalogues, customized recurring plans, quotation-to-subscription workflows, automated billing runs with zero-collision idempotency, flexible discount rules, multi-method payments, accounts receivable tracking, and customer self-service.
 
-## Run it
+---
 
-Requires Node 22 or newer.
+## Key Highlights & Business Capabilities
 
-```bash
-npm install
-npm run seed      # creates data/brightloop.db with a demo company (2,400 subscriptions, ~14,600 invoices)
-npm run dev       # API on :3000, web app on http://localhost:5173
+### 1. Multi-Tier Role-Based Access Control (RBAC)
+- **Role Isolation**: Strict separation across **Administrator**, **Staff Member**, and **Customer** roles enforced at the server route layer.
+- **Secure Authentication**: Sessions managed via secure `httpOnly`, `SameSite=Lax` cookies with `bcrypt`-hashed passwords.
+- **Self-Service Customer Portal**: Dedicated client portal (`/portal`) where customers can only access their own subscriptions, invoices, and payment receipts.
+- **Password Resilience**: Enforces strict password policies (>8 characters with mixed uppercase, lowercase, and special characters) and secure, single-use SHA-256 password reset tokens with automatic invalidation of old sessions.
+
+### 2. Product Catalogue & Dynamic Variants
+- **Products**: Support for services and physical goods with configurable cost price, base sales price, description notes, and applicable tax classifications.
+- **Variants & Surcharges**: Dynamic product variants (e.g., brand editions, regional options) that calculate automatic surcharges applied directly to the line unit price.
+
+### 3. Flexible Recurring Subscription Plans
+- **Billing Intervals**: Configurable daily, weekly, monthly, and yearly recurring periods.
+- **Policy Controls**:
+  - Minimum commitment quantity rules.
+  - Plan availability date windows (start and end validity).
+  - Configurable switches for auto-closing at expiration, early termination, mid-cycle pausing, and renewals.
+
+### 4. Quotation Pipeline & Subscription Lifecycle
+- **Quotation Templates**: Reusable templates with default plans, line items, and validity durations.
+- **Standardized Numbering**: Automated document sequencing (e.g., `SUB/2026/00001`).
+- **Enforced State Machine**: Formal transition validation:
+  $$\text{Draft} \longrightarrow \text{Quotation} \longrightarrow \text{Confirmed} \longrightarrow \text{Active} \longleftrightarrow \text{Paused} \longrightarrow \text{Closed}$$
+- Expiration safeguards prevent confirmation of expired quotations.
+
+### 5. Automated Recurring Billing Engine
+- **Atomic Catch-Up Runs**: One-click and automated billing cycles that identify all active subscriptions due for invoicing up to a given cut-off date.
+- **Guaranteed Idempotency**: Protected against double-billing via database-level unique indexing on `(subscription_id, period_start)`. Even concurrent billing executions cannot double-charge.
+- **Calendar Anchoring**: Periods correctly anchored to original subscription start dates (e.g., a subscription starting January 31 correctly bills February 28, then March 31).
+
+### 6. Dynamic Discount & Promotion Engine
+- **Flexible Rules**: Fixed cash deductions or percentage discounts.
+- **Conditional Qualification**: Minimum subtotal thresholds, minimum purchase quantities, date ranges, and maximum usage caps.
+- **Scope Targeting**: Universal subscription-wide discounts or specific product-line targeting.
+- **Automatic Lifecycle Reversals**: Cancelling an unpaid invoice automatically restores discount coupon usage quotas.
+
+### 7. Invoice Lifecycle & Tax Calculations
+- **Document Sequence**: Standardized invoice numbering (e.g., `INV/2026/00001`).
+- **Audit States**: `Draft` $\rightarrow$ `Confirmed` $\rightarrow$ `Paid` (or `Cancelled`).
+- **Tax & Discount Math**: Accurate line-level calculation (discount applied before tax calculation) rounded to exact whole paise to prevent precision drift.
+- **Print & Delivery**: Clean, print-ready invoices and simulated email delivery for dispatch logs.
+
+### 8. Payment Recording & Accounts Receivable (AR)
+- **Multi-Method Tracking**: Support for UPI, Bank Transfer, Credit/Debit Card, Cheque, and Cash payments against confirmed invoices.
+- **Payment Allocation**: Granular partial payment support with strict validation preventing overpayments.
+- **Aging & Overdue Tracking**: Real-time identification of overdue invoices based on configured payment terms (Immediate, Net-15, Net-30, Net-45).
+
+### 9. High-Performance Executive Dashboard
+- **Instant Response Times**: Sub-100 ms query performance even with thousands of active subscriptions and historical invoices.
+- **Key Metrics**: Monthly Recurring Revenue (MRR), total collected revenue, outstanding accounts receivable, receivables aging buckets (0–30, 31–60, 61–90, 90+ days), longest overdue accounts, and revenue breakdown by plan.
+
+---
+
+## System Architecture
+
+```
+client/ (React 19 + TypeScript + Vite)
+   │
+   └── HTTP JSON (/api) with httpOnly session cookies
+         │
+         ▼
+server/ (Express 5 + TypeScript)
+   ├── routes/     Thin validation and authorization layer (Zod schemas)
+   ├── services/   Transactional SQL business operations
+   ├── domain/     Pure, zero-dependency domain models & business rules
+   └── db/         SQLite engine (better-sqlite3) with WAL mode & foreign keys
 ```
 
-Production build on one port:
+### Technical Design Principles
+- **Domain-Driven Design (DDD)**: Business logic, discount calculations, tax formulas, password validation, and billing periods reside in pure domain modules tested independently of database or HTTP dependencies.
+- **Zero Floating-Point Drift**: All currency values are stored and calculated as integer paise (1 INR = 100 paise), avoiding JavaScript floating-point errors.
+- **Fast Embedded Persistence**: Utilizes SQLite via `better-sqlite3` configured with Write-Ahead Logging (WAL) and foreign key constraints for fast local execution without external database overhead.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Node.js**: Version 22.0.0 or higher
+- **npm**: Version 10 or higher
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/santhoshkrishnan-M/odoo-hack-2026.git
+   cd odoo-hack-2026
+   ```
+
+2. **Install project dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Initialize and seed the database**:
+   ```bash
+   npm run seed
+   ```
+   *This initializes `data/brightloop.db` and populates realistic demo records including products, plans, tax categories, subscriptions, and historical invoices.*
+
+4. **Launch the development environment**:
+   ```bash
+   npm run dev
+   ```
+   - **Web Application**: `http://localhost:5173`
+   - **Backend API**: `http://localhost:3000/api`
+   - **Development Mailbox**: `http://localhost:5173/mailbox` *(captures password reset and invoice emails in development)*
+
+---
+
+## Production Deployment
+
+To compile and serve the optimized single-port production build:
 
 ```bash
+# Build the client bundle
 npm run build
-npm start         # http://localhost:3000 (creates data/ and seeds on first start)
+
+# Start the unified production server
+npm run start
 ```
+The server will be reachable at `http://localhost:3000`.
 
-Demo accounts (also one click away on the sign-in page):
+### Environment Configuration
+The application supports the following environment variables:
 
-| Role | Email | Password |
+| Variable | Description | Default |
 | --- | --- | --- |
-| Admin | admin@brightloop.test | Admin!pass1 |
-| Staff | staff@brightloop.test | Staff!pass1 |
-| Customer | customer@brightloop.test | Customer!1 |
+| `PORT` | Web server listening port | `3000` |
+| `DB_FILE` | Relative or absolute path to the SQLite database file | `data/brightloop.db` |
+| `SEED_SUBSCRIPTIONS` | Number of synthetic subscriptions generated on initial seed | `2400` |
+| `DEV_MAILBOX` | Enable virtual mailbox interface in production mode (`1` = enabled) | `0` (disabled) |
 
-Password-reset and invoice emails are written to a demo mailbox at `/mailbox` instead of being sent. It is on with
-`npm run dev`; with `npm start` turn it on with the environment variable `DEV_MAILBOX=1` (never on a public server: it
-shows reset links).
+---
 
-## How each scene in the brief is handled
+## User Roles & Evaluation Access
 
-| Scene | Where |
-| --- | --- |
-| **A new customer signs up** — unique email, password > 8 chars with upper, lower and special character, reset link by email | `/signup` (live rule checklist), `/forgot-password` → `/mailbox` → `/reset-password`. Tokens are single-use, 60 minutes, stored hashed; a reset ends old sessions. |
-| **Roles** — admin, staff with limited access, customers in a portal; only admin adds staff | Server-side role checks on every route. Admin: everything + Team. Staff: day-to-day work, read-only catalogue. Customers: `/portal`, only their own records (others return 404). |
-| **Launching a new plan** — product with type, sales/cost price, notes, variants (Odoo brand +₹560); plan with price, daily/weekly/monthly/yearly, minimum quantity, availability dates, auto-close / close / pause / renew switches | Products, Plans (admin). Variant extra price is added to the line's unit price. |
-| **Turning a quote into a subscription** — templates with plan, lines, validity; numbered subscriptions moving Draft → Quotation → Confirmed → Active → Closed | Quotation templates → "Quote a customer". `SUB/2026/00001` numbering, status path on every subscription, expired quotations cannot be confirmed. |
-| **Billing day** — invoices generated from subscriptions with lines, taxes, totals; Draft → Confirmed → Paid; confirm, cancel, send, print; nothing billed twice or skipped | "Run billing" bills every due period (catching up missed ones) in one transaction. A unique index on (subscription, period) makes double billing impossible. Bulk confirm/send; print-ready invoice. |
-| **A customer asks for a better price** — admin-only discount rules: fixed or %, minimum purchase or quantity, dates, usage limit, products or subscriptions; applied automatically | Discounts (admin). Applied while each invoice is generated; cancelling an invoice gives the use back. |
-| **The money comes in** — payments with method, amount, date, note against an invoice; paid vs outstanding; overdue | Record payment from any invoice (partial payments allowed, overpayment refused). Invoice tabs: awaiting payment, overdue, paid. |
-| **The finance lead** — active subscriptions, revenue, owed, overdue, filters, < 2 s with thousands of subscriptions | Overview: MRR, collected, still owed, overdue, collections per month, receivables ageing, longest overdue, revenue by plan; filter by period and plan. Measured at 3,000 subscriptions: dashboard ~80 ms, lists ~10 ms. |
+The application includes three standard roles:
 
-## Architecture
+1. **Administrator**: Full system management, catalog configuration, discount rules, team user management, billing execution, and finance analytics.
+2. **Staff**: Operational workflows including quotation creation, customer management, invoice management, payment logging, and dashboard viewing.
+3. **Customer**: Self-service portal access restricted strictly to their individual subscriptions, invoices, and payments.
 
-```
-client/  React 19 + TypeScript + Vite       → /api (JSON, httpOnly session cookie)
-server/  Express 5 + TypeScript
-  domain/    pure rules: passwords, money, billing periods, lifecycles, invoice pricing (discounts → tax)
-  services/  SQL and transactions: auth, subscriptions, billing, invoices, payments, reports
-  routes/    zod validation + role checks, thin
-  db/        SQLite schema (better-sqlite3), demo seed
-```
+> **Evaluation Quick Fill**: When running in development mode, the sign-in page features quick-select buttons for each role to facilitate rapid testing and review. New customer accounts can also be created on-demand via the `/signup` screen.
 
-Money is stored as integer paise. Dates are ISO strings. Periods are anchored to the start date
-(a subscription that starts on 31 January bills on 28 February, then 31 March).
+---
 
-## Tests
+## Quality Assurance & Testing
+
+The platform includes a test suite covering pure domain math, API routes, authorization boundaries, billing idempotency, and query response times.
 
 ```bash
-npm test           # 105 tests: domain rules, every API flow, role isolation, billing idempotency, performance
+# Execute test suite
+npm test
+
+# Run TypeScript type verification
 npm run typecheck
 ```
 
-## Assumptions
+---
 
-- Payments are recorded by staff; there is no payment gateway.
-- Email delivery is simulated (outbox table + `/mailbox`).
-- Prices are in Indian rupees; taxes are percentages added on top of each line.
-- Product prices are per billing period of the plan they are sold on.
-- Out of scope: proration of mid-period changes, credit notes, multi-currency.
+## Security Practices
 
-## Process
-
-Built with the `superpowers` skills (brainstorming → spec → plan → test-driven development →
-verification) and the `design-taste-frontend` skill for the interface (achromatic-ledger app style,
-checked with its linter and real-browser inspector). The spec and plan are in `docs/superpowers/`.
+- **Sanitized Inputs**: All incoming API requests are validated against strict Zod schemas before touching service layers.
+- **Session Protection**: Authentication tokens are stored inside tamper-proof, HTTP-only session cookies.
+- **Role Isolation**: Strict server-side checks verify customer ownership of all accessed resources, preventing horizontal privilege escalation.
+- **Secret Hygiene**: Sensitive credentials, production secrets, and private access keys are excluded from version control.

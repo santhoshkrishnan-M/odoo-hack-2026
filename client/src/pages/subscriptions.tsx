@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, qs, type Page } from '../api';
 import {
-  BackLink, Empty, ErrorNote, Field, InvStatus, KeyValues, Loading, Modal, Money, PageHead, Pager, Panel, Picker, searchCustomers,
-  SubStatus, useApi, useQueryState, useSubmit,
+  ActivityList, BackLink, Empty, ErrorNote, ExportLink, Field, InvStatus, KeyValues, Loading, Modal, Money, PageHead, Pager, Panel, Picker, searchCustomers,
+  SubStatus, useApi, useQueryState, useSubmit, type ActivityRow,
 } from '../components';
 import { addDaysIso, count, dateWords, money, PERIOD_ADJ, PERIOD_WORD, periodText, SUB_STATUS, TERMS_LABEL, todayIso, toPaise, toRupeesText } from '../format';
 
@@ -14,7 +14,7 @@ export interface Product { id: number; name: string; type: string; salesPrice: n
 export interface Tax { id: number; name: string; rate: number; active: boolean }
 
 interface SubRow { id: number; number: string; status: string; startDate: string; expiryDate: string | null; nextInvoiceDate: string | null;
-  validUntil: string | null; customerId: number; customerName: string; planName: string; period: string; recurringAmount: number }
+  validUntil: string | null; customerId: number; customerName: string; planName: string; period: string; recurringAmount: number; atRisk: boolean; source: string }
 
 const TABS = ['', 'quotation', 'confirmed', 'active', 'paused', 'draft', 'closed'];
 
@@ -22,7 +22,8 @@ export function SubscriptionsPage() {
   const [p, set] = useQueryState();
   const page = Number(p.get('page') ?? 1);
   const status = p.get('status') ?? '';
-  const { data, error, reload } = useApi<Page<SubRow>>(`/subscriptions${qs({ page, status, planId: p.get('planId'), customerId: p.get('customerId'), q: p.get('q') })}`);
+  const query = { page, status, planId: p.get('planId'), customerId: p.get('customerId'), q: p.get('q'), atRisk: p.get('atRisk'), endingSoon: p.get('endingSoon') };
+  const { data, error, reload } = useApi<Page<SubRow>>(`/subscriptions${qs(query)}`);
   const { data: plans } = useApi<{ rows: Plan[] }>('/plans');
   const [quoting, setQuoting] = useState(false);
   const [q, setQ] = useState(p.get('q') ?? '');
@@ -47,7 +48,11 @@ export function SubscriptionsPage() {
             <option value="">All plans</option>
             {plans?.rows.map((pl) => <option key={pl.id} value={pl.id}>{pl.name}</option>)}
           </select>
+          <button className="btn" aria-pressed={p.get('atRisk') === '1'} onClick={() => set({ atRisk: p.get('atRisk') ? null : '1' })}>{p.get('atRisk') ? '✓ ' : ''}With overdue invoices</button>
+          <button className="btn" aria-pressed={p.get('endingSoon') === '1'} onClick={() => set({ endingSoon: p.get('endingSoon') ? null : '1' })}>{p.get('endingSoon') ? '✓ ' : ''}Ending in 30 days</button>
           {p.get('customerId') ? <button className="btn" onClick={() => set({ customerId: null })}>Clear customer filter</button> : null}
+          <span className="spacer" />
+          <ExportLink what="subscriptions" query={query} />
         </div>
         {error ? <div style={{ padding: 20 }}><ErrorNote error={error} onRetry={reload} /></div> : !data ? <div style={{ padding: 20 }}><Loading /></div> : data.rows.length === 0 ? (
           <div style={{ padding: 20 }}><Empty>No subscriptions match these filters.</Empty></div>
@@ -61,7 +66,8 @@ export function SubscriptionsPage() {
                     <td><Link className="link mono" to={`/subscriptions/${r.id}`}>{r.number}</Link></td>
                     <td className="truncate"><Link to={`/customers/${r.customerId}`}>{r.customerName}</Link></td>
                     <td className="hide-sm">{r.planName}</td>
-                    <td><SubStatus status={r.status} />{r.status === 'quotation' && r.validUntil ? <span className="sub">valid until {r.validUntil}</span> : null}</td>
+                    <td><SubStatus status={r.status} />{r.atRisk ? <span className="pill neg" style={{ marginLeft: 6 }}>Overdue</span> : null}
+                      {r.status === 'quotation' && r.validUntil ? <span className="sub">valid until {r.validUntil}</span> : r.source === 'portal' ? <span className="sub">ordered online</span> : null}</td>
                     <td className="n num hide-sm">{r.status === 'active' && r.nextInvoiceDate && (!r.expiryDate || r.nextInvoiceDate < r.expiryDate) ? r.nextInvoiceDate : <span className="muted">—</span>}</td>
                     <td className="n"><Money value={r.recurringAmount} /><span className="sub">per {PERIOD_WORD[r.period]}</span></td>
                     <td className="n num hide-sm">{r.startDate}</td>
@@ -109,9 +115,10 @@ interface SubDetail {
   id: number; number: string; status: string; customerId: number; customerName: string; customerEmail: string; planId: number; planName: string; period: string;
   planPrice: number; pausable: boolean; closable: boolean; renewable: boolean; autoClose: boolean; minQuantity: number; startDate: string; expiryDate: string | null;
   validUntil: string | null; nextInvoiceDate: string | null; paymentTermsDays: number; notes: string; templateName: string | null; createdAt: string; planTaxName: string | null;
-  billing: { invoiced: number; paid: number; owed: number };
+  billing: { invoiced: number; paid: number; owed: number; credited: number; overdue: number }; mrr: number; source: string; closeReason: string | null; closeNote: string;
+  activity: ActivityRow[];
   lines: { id: number; productId: number; variantId: number | null; description: string; quantity: number; unitPrice: number; taxId: number | null; taxName: string | null; taxRate: number | null; amount: number }[];
-  invoices: { id: number; number: string; status: string; invoiceDate: string; dueDate: string; periodStart: string; periodEnd: string; total: number; amountPaid: number }[];
+  invoices: { id: number; number: string; kind: string; status: string; invoiceDate: string; dueDate: string; periodStart: string; periodEnd: string; total: number; amountPaid: number }[];
 }
 
 const PATH = ['draft', 'quotation', 'confirmed', 'active', 'closed'];
@@ -155,10 +162,13 @@ export function SubscriptionDetailPage() {
   const { data: s, error, reload } = useApi<SubDetail>(`/subscriptions/${id}`);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [changing, setChanging] = useState(false);
   const nav = useNavigate();
   if (error) return <ErrorNote error={error} onRetry={reload} />;
   if (!s) return <Loading />;
   const act = async (a: { action: string; label: string; confirm?: string }) => {
+    if (a.action === 'close' && ['confirmed', 'active', 'paused'].includes(s.status)) { setClosing(true); return; }
     if (a.confirm && !window.confirm(a.confirm)) return;
     setErr(null); setMsg(null);
     try {
@@ -178,11 +188,16 @@ export function SubscriptionDetailPage() {
         sub={<><Link to={`/customers/${s.customerId}`} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{s.customerName}</Link> · {s.planName} · {money(recurring)} per {PERIOD_WORD[s.period]} before tax</>}
         actions={<>
           {['draft', 'quotation'].includes(s.status) ? <button className="btn" onClick={() => nav(`/subscriptions/${s.id}/edit`)}>Edit</button> : null}
+          {['active', 'paused', 'confirmed'].includes(s.status) ? <button className="btn" onClick={() => setChanging(true)}>Upgrade or downgrade</button> : null}
           {actions.map((a) => <button key={a.action} className={`btn${a.primary ? ' primary' : ''}${a.danger ? ' danger' : ''}`} onClick={() => act(a)}>{a.label}</button>)}
         </>} />
       {msg ? <p className="ok-note" role="status" style={{ margin: '-8px 0 12px' }}>{msg}</p> : null}
       {err ? <div style={{ margin: '-8px 0 12px' }}><ErrorNote error={err} /></div> : null}
+      {s.billing.overdue > 0 ? <div className="error-note" style={{ margin: '-4px 0 12px' }}>{count(s.billing.overdue)} invoice{s.billing.overdue === 1 ? ' is' : 's are'} overdue on this subscription ({money(s.billing.owed)} owed).</div> : null}
+      {s.status === 'closed' && s.closeReason ? <p className="stamp" style={{ margin: '-4px 0 12px' }}>Closed: {s.closeReason}{s.closeNote ? ` — “${s.closeNote}”` : ''}</p> : null}
       <StatusPath status={s.status} />
+      {closing ? <CloseModal subId={s.id} number={s.number} portal={false} onClose={() => setClosing(false)} onDone={(st) => { setClosing(false); setMsg(`Now ${SUB_STATUS[st].label.toLowerCase()}.`); reload(); }} /> : null}
+      {changing ? <ChangeModal sub={s} onClose={() => setChanging(false)} onDone={(text) => { setChanging(false); setMsg(text); reload(); }} /> : null}
       <div className="cols-2">
         <div className="stack">
           <Panel className="flush" title="Recurring lines" meta={`billed every ${PERIOD_WORD[s.period]}`}>
@@ -208,7 +223,7 @@ export function SubscriptionDetailPage() {
                   <tbody>
                     {s.invoices.slice(0, 12).map((i) => (
                       <tr key={i.id}>
-                        <td><Link className="link mono" to={`/invoices/${i.id}`}>{i.number}</Link><span className="sub">{i.invoiceDate}</span></td>
+                        <td><Link className="link mono" to={`/invoices/${i.id}`}>{i.number}</Link><span className="sub">{i.kind === 'credit_note' ? 'credit note · ' : i.kind === 'upsell' ? 'upgrade · ' : ''}{i.invoiceDate}</span></td>
                         <td className="hide-sm num">{periodText(i.periodStart, i.periodEnd)}</td>
                         <td><InvStatus status={i.status} overdue={i.status === 'confirmed' && i.dueDate < todayIso()} /></td>
                         <td className="n"><Money value={i.total} /></td>
@@ -228,6 +243,8 @@ export function SubscriptionDetailPage() {
             ['Invoiced', <Money value={s.billing.invoiced} />],
             ['Paid', <Money value={s.billing.paid} />],
             ['Owed', s.billing.owed ? <span className="num strong">{money(s.billing.owed)}</span> : <Money value={0} />],
+            ...(s.billing.credited ? [['Credited', <Money value={s.billing.credited} />] as [string, React.ReactNode]] : []),
+            ['Monthly value', <span className="num">{money(s.mrr)}</span>],
           ]} />
         </Panel>
         <Panel title="Details">
@@ -243,6 +260,9 @@ export function SubscriptionDetailPage() {
             ['Plan rules', [s.autoClose ? 'closes at end date' : null, s.pausable ? 'can pause' : null, s.closable ? 'can close early' : 'no early close', s.renewable ? 'renewable' : 'not renewable'].filter(Boolean).join(', ')],
           ]} />
           {s.notes ? <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>{s.notes}</p> : null}
+        </Panel>
+        <Panel title="History" meta={s.source === 'portal' ? 'ordered online' : undefined}>
+          <ActivityList rows={s.activity} compact />
         </Panel>
         </div>
       </div>
@@ -384,5 +404,87 @@ export function SubscriptionFormPage() {
         </Panel>
       </form>
     </>
+  );
+}
+
+/* ---------- close with a reason ---------- */
+export function CloseModal({ subId, number, portal, onClose, onDone }: { subId: number; number: string; portal: boolean; onClose: () => void; onDone: (status: string) => void }) {
+  const { data } = useApi<{ rows: { id: number; name: string }[] }>(portal ? '/portal/close-reasons' : '/admin/close-reasons', { live: false });
+  const [reasonId, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const s = useSubmit(() => api<{ status: string }>(`${portal ? '/portal' : ''}/subscriptions/${subId}/actions/close`, { body: { reasonId: reasonId ? Number(reasonId) : null, note } }), (r) => onDone(r.status));
+  return (
+    <Modal title={`Close ${number}`} onClose={onClose}>
+      <form className="form" onSubmit={(e) => { if (!reasonId) { e.preventDefault(); s.setError('Choose a reason.'); return; } void s.run(e); }}>
+        {s.error ? <ErrorNote error={s.error} /> : null}
+        <p className="muted" style={{ marginTop: 0 }}>It will not be billed again. Invoices already issued stay payable.</p>
+        <Field label="Reason">{(id) => <select id={id} className="input" value={reasonId} onChange={(e) => setReason(e.target.value)}>
+          <option value="">Choose a reason</option>
+          {data?.rows.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>}</Field>
+        <Field label="Anything else? (optional)">{(id) => <textarea id={id} className="input" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />}</Field>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Keep it</button><button className="btn danger" disabled={s.busy}>Close subscription</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ---------- upsell / downsell ---------- */
+function ChangeModal({ sub, onClose, onDone }: { sub: SubDetail; onClose: () => void; onDone: (text: string) => void }) {
+  const { data: products } = useApi<{ rows: Product[] }>('/products', { live: false });
+  const [lines, setLines] = useState(sub.lines.map((l) => ({ key: ++lineKey, productId: String(l.productId), variantId: l.variantId ? String(l.variantId) : '', quantity: String(l.quantity), unitPrice: l.unitPrice, keep: true })));
+  const unitOf = (l: (typeof lines)[number]) => {
+    const p = products?.rows.find((x) => String(x.id) === l.productId);
+    if (!p) return l.unitPrice;
+    const existing = sub.lines.find((x) => String(x.productId) === l.productId && String(x.variantId ?? '') === l.variantId);
+    return existing ? existing.unitPrice : p.salesPrice + (p.variants.find((v) => String(v.id) === l.variantId)?.extraPrice ?? 0);
+  };
+  const before = sub.lines.reduce((a, l) => a + l.amount, 0);
+  const after = lines.reduce((a, l) => a + unitOf(l) * (Number(l.quantity) || 0), 0);
+  const delta = after - before;
+  const upd = (key: number, patch: Partial<(typeof lines)[number]>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const s = useSubmit(() => api<{ oldMrr: number; newMrr: number; upsell: { number: string; total: number } | null; credit: { number: string; total: number } | null }>(`/subscriptions/${sub.id}/change`, {
+    body: { lines: lines.filter((l) => l.productId).map((l) => ({ productId: Number(l.productId), variantId: l.variantId ? Number(l.variantId) : null, quantity: Number(l.quantity) || 0,
+      unitPrice: sub.lines.find((x) => String(x.productId) === l.productId && String(x.variantId ?? '') === l.variantId)?.unitPrice ?? null })) },
+  }), (r) => onDone(`Monthly value ${money(r.oldMrr)} → ${money(r.newMrr)}.${r.upsell ? ` Prorated invoice ${r.upsell.number} for ${money(r.upsell.total)} issued.` : ''}${r.credit ? ` Credit note ${r.credit.number} for ${money(r.credit.total)} issued.` : ''}`));
+  return (
+    <Modal title={`Upgrade or downgrade ${sub.number}`} onClose={onClose} wide>
+      <form className="form" onSubmit={s.run} noValidate>
+        {s.error ? <ErrorNote error={s.error} /> : null}
+        <p className="muted" style={{ marginTop: 0 }}>New quantities apply from the next invoice. {sub.status === 'active' ? 'The rest of the current period is settled now: a prorated invoice for an increase, a prorated credit note for a decrease.' : ''}</p>
+        <div className="table-wrap">
+          <table className="lines-table">
+            <thead><tr><th>Product</th><th>Variant</th><th className="n">Qty</th><th className="n">Per {PERIOD_WORD[sub.period]}</th><th><span className="sr-only">Remove</span></th></tr></thead>
+            <tbody>
+              {lines.map((l) => {
+                const p = products?.rows.find((x) => String(x.id) === l.productId);
+                return (
+                  <tr key={l.key}>
+                    <td><select className="input" aria-label="Product" value={l.productId} onChange={(e) => upd(l.key, { productId: e.target.value, variantId: '' })}>
+                      <option value="">Choose</option>
+                      {products?.rows.filter((x) => x.active || String(x.id) === l.productId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select></td>
+                    <td>{p && p.variants.length ? <select className="input" aria-label="Variant" value={l.variantId} onChange={(e) => upd(l.key, { variantId: e.target.value })}>
+                      <option value="">Standard</option>{p.variants.map((v) => <option key={v.id} value={v.id}>{v.attribute}: {v.value}</option>)}</select> : <span className="muted">—</span>}</td>
+                    <td className="qty"><div className="stepper">
+                      <button type="button" className="btn" aria-label="One fewer" onClick={() => upd(l.key, { quantity: String(Math.max(sub.minQuantity, (Number(l.quantity) || 0) - 1)) })}>−</button>
+                      <input className="input num" style={{ textAlign: 'center', width: 64 }} aria-label="Quantity" inputMode="numeric" value={l.quantity} onChange={(e) => upd(l.key, { quantity: e.target.value.replace(/\D/g, '') })} />
+                      <button type="button" className="btn" aria-label="One more" onClick={() => upd(l.key, { quantity: String((Number(l.quantity) || 0) + 1) })}>+</button>
+                    </div></td>
+                    <td className="n"><Money value={unitOf(l) * (Number(l.quantity) || 0)} /></td>
+                    <td><button type="button" className="btn ghost" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>Remove</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="panel-foot" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button type="button" className="btn" onClick={() => setLines((ls) => [...ls, { key: ++lineKey, productId: '', variantId: '', quantity: String(sub.minQuantity), unitPrice: 0, keep: true }])}>Add a product</button>
+          <span className="num">{money(before)} → <strong>{money(after)}</strong> per {PERIOD_WORD[sub.period]} <span className={delta < 0 ? 'neg-text' : 'pos-text'}>({delta >= 0 ? '+' : '−'}{money(Math.abs(delta))})</span></span>
+        </div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={s.busy || delta === 0 && lines.length === sub.lines.length}>{delta > 0 ? 'Upgrade' : delta < 0 ? 'Downgrade' : 'Save change'}</button></div>
+      </form>
+    </Modal>
   );
 }

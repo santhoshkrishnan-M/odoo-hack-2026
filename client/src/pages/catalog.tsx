@@ -372,7 +372,7 @@ function KeyValuesLite({ rows }: { rows: [string, string][] }) {
 }
 
 /* ---------- quotation templates ---------- */
-interface Template { id: number; name: string; planId: number; planName: string; period?: string; validityDays: number; paymentTermsDays: number; termMonths: number | null; notes: string; lineCount?: number;
+interface Template { id: number; name: string; planId: number; planName: string; period?: string; validityDays: number; paymentTermsDays: number; termMonths: number | null; notes: string; lineCount?: number; published?: boolean; description?: string;
   lines?: { id: number; productId: number; variantId: number | null; quantity: number; productName: string; variantValue: string | null }[] }
 
 export function TemplatesPage() {
@@ -390,7 +390,7 @@ export function TemplatesPage() {
             <thead><tr><th>Template</th><th>Plan</th><th className="n hide-sm">Lines</th><th className="n hide-sm">Valid for</th><th className="n hide-sm">Term</th><th><span className="sr-only">Action</span></th></tr></thead>
             <tbody>{data.rows.map((t) => (
               <tr key={t.id}>
-                <td><Link className="link" to={`/templates/${t.id}`}>{t.name}</Link>{t.notes ? <span className="sub truncate">{t.notes}</span> : null}</td>
+                <td><Link className="link" to={`/templates/${t.id}`}>{t.name}</Link>{t.published ? <span className="pill pos" style={{ marginLeft: 6 }}>On sale online</span> : null}{t.notes ? <span className="sub truncate">{t.notes}</span> : null}</td>
                 <td>{t.planName}</td><td className="n num hide-sm">{t.lineCount}</td><td className="n num hide-sm">{t.validityDays} days</td>
                 <td className="n num hide-sm">{t.termMonths ? `${t.termMonths} months` : <span className="muted">—</span>}</td>
                 <td className="n"><button className="btn" onClick={() => setQuoting(t.id)}>Quote a customer</button></td>
@@ -412,18 +412,18 @@ export function TemplateFormPage() {
   const existing = useApi<Template>(id ? `/templates/${id}` : null);
   const { data: plans } = useApi<{ rows: Plan[] }>('/plans');
   const { data: products } = useApi<{ rows: Product[] }>('/products');
-  const [f, setF] = useState({ name: '', planId: '', validityDays: '30', paymentTermsDays: '15', termMonths: '', notes: '' });
+  const [f, setF] = useState({ name: '', planId: '', validityDays: '30', paymentTermsDays: '15', termMonths: '', notes: '', description: '', published: false });
   const [lines, setLines] = useState<TLine[]>([{ key: ++tk, productId: '', variantId: '', quantity: '1' }]);
   const [loaded, setLoaded] = useState(!id);
   useEffect(() => {
     const t = existing.data;
     if (!t || loaded) return;
-    setF({ name: t.name, planId: String(t.planId), validityDays: String(t.validityDays), paymentTermsDays: String(t.paymentTermsDays), termMonths: t.termMonths ? String(t.termMonths) : '', notes: t.notes });
+    setF({ name: t.name, planId: String(t.planId), validityDays: String(t.validityDays), paymentTermsDays: String(t.paymentTermsDays), termMonths: t.termMonths ? String(t.termMonths) : '', notes: t.notes, description: t.description ?? '', published: Boolean(t.published) });
     setLines((t.lines ?? []).map((l) => ({ key: ++tk, productId: String(l.productId), variantId: l.variantId ? String(l.variantId) : '', quantity: String(l.quantity) })));
     setLoaded(true);
   }, [existing.data, loaded]);
   const body = () => ({ name: f.name, planId: Number(f.planId) || 0, validityDays: Number(f.validityDays) || 0, paymentTermsDays: Number(f.paymentTermsDays),
-    termMonths: f.termMonths ? Number(f.termMonths) : null, notes: f.notes,
+    termMonths: f.termMonths ? Number(f.termMonths) : null, notes: f.notes, description: f.description, published: f.published,
     lines: lines.filter((l) => l.productId).map((l) => ({ productId: Number(l.productId), variantId: l.variantId ? Number(l.variantId) : null, quantity: Number(l.quantity) || 0 })) });
   const s = useSubmit(() => (id ? api(`/templates/${id}`, { method: 'PUT', body: body() }) : api('/templates', { body: body() })), () => nav('/templates'));
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
@@ -447,6 +447,11 @@ export function TemplateFormPage() {
               <Field label="Payment terms">{(fid) => <select id={fid} className="input" value={f.paymentTermsDays} onChange={set('paymentTermsDays')}><option value="0">Due on receipt</option><option value="15">15 days</option><option value="30">30 days</option><option value="45">45 days</option></select>}</Field>
               <Field label="Contract length, months" hint="Sets the end date; empty runs until closed">{(fid) => <input id={fid} className="input num" inputMode="numeric" value={f.termMonths} onChange={set('termMonths')} />}</Field>
               <Field label="Notes for the customer" wide>{(fid) => <textarea id={fid} className="input" value={f.notes} onChange={set('notes')} />}</Field>
+              <label className="toggle-row wide">
+                <span><span className="toggle-label">Sell online</span><span className="hint">Show this package on the public pricing page and in the customer portal, where customers order and pay for it themselves.</span></span>
+                <input type="checkbox" className="switch" role="switch" checked={f.published} onChange={(e) => setF({ ...f, published: e.target.checked })} />
+              </label>
+              {f.published ? <Field label="Description on the pricing page" wide>{(fid) => <textarea id={fid} className="input" value={f.description} onChange={set('description')} />}</Field> : null}
             </div>
           </Panel>
           <Panel className="flush" title="Product lines">

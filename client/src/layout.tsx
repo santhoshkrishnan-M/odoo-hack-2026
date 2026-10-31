@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Icon, Mark } from './icons';
 import { useApi } from './components';
+import { LiveBadge, Toaster } from './toasts';
 
 interface NavItem { to: string; label: string; icon: () => ReactElement; end?: boolean; adminOnly?: boolean; count?: number }
 
@@ -40,6 +41,7 @@ function Shell({ scope, groups, children }: { scope: string; groups: { label?: s
           </div>
         ))}
         <div className="bottom">
+          <LiveBadge />
           <div className="user-row">
             <span className="avatar" aria-hidden="true">{user?.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}</span>
             <div className="who"><div>{user?.name}</div><div className="sub">{user?.role === 'customer' ? user.email : user?.role === 'admin' ? 'Admin' : 'Staff'}</div></div>
@@ -48,6 +50,7 @@ function Shell({ scope, groups, children }: { scope: string; groups: { label?: s
         </div>
       </nav>
       <main className="canvas" id="main">{children}</main>
+      <Toaster />
     </div>
   );
 }
@@ -71,7 +74,11 @@ export function StaffLayout() {
       { to: '/taxes', label: 'Taxes', icon: Icon.taxes },
     ] },
   ];
-  if (user?.role === 'admin') groups.push({ label: 'Admin', items: [{ to: '/team', label: 'Team', icon: Icon.team }] });
+  if (user?.role === 'admin') groups.push({ label: 'Admin', items: [
+    { to: '/settings', label: 'Settings & automation', icon: Icon.settings },
+    { to: '/emails', label: 'Email log', icon: Icon.mail },
+    { to: '/team', label: 'Team', icon: Icon.team },
+  ] });
   return <Shell scope="Brightloop Software · Billing" groups={groups}><Outlet /></Shell>;
 }
 
@@ -81,6 +88,7 @@ export function PortalLayout() {
     <Shell scope={data?.company || data?.name || 'Your account'} groups={[{ items: [
       { to: '/portal', label: 'Subscriptions', icon: Icon.subscriptions, end: true },
       { to: '/portal/invoices', label: 'Invoices', icon: Icon.invoices },
+      { to: '/portal/plans', label: 'Browse plans', icon: Icon.plans },
       { to: '/portal/profile', label: 'Profile', icon: Icon.profile },
     ] }]}><Outlet /></Shell>
   );

@@ -62,7 +62,7 @@ export function Login() {
         <Field label="Password" error={s.fields.password}>{(id) => <input id={id} className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}</Field>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}><Link to="/forgot-password" className="muted">Forgot password?</Link></div>
         <button className="btn primary" disabled={s.busy}>{s.busy ? 'Signing in…' : 'Sign in'}</button>
-        <p className="muted" style={{ margin: 0 }}>New customer? <Link to="/signup" style={{ color: 'var(--text)', fontWeight: 500 }}>Create an account</Link></p>
+        <p className="muted" style={{ margin: 0 }}>New customer? <Link to="/signup" style={{ color: 'var(--text)', fontWeight: 500 }}>Create an account</Link> or <Link to="/pricing" style={{ color: 'var(--text)', fontWeight: 500 }}>see plans and pricing</Link></p>
         <div className="demo-logins">
           Demo accounts:{' '}
           <button type="button" onClick={() => fill('admin@brightloop.test', 'Admin!pass1')}>admin</button>,{' '}
@@ -77,8 +77,10 @@ export function Login() {
 export function Signup() {
   const { user, setUser } = useAuth();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get('next')?.startsWith('/portal') ? params.get('next')! : '/portal';
   const [f, setF] = useState({ name: '', company: '', email: '', password: '' });
-  const s = useSubmit(() => api<{ user: User }>('/auth/signup', { body: f }), ({ user: u }) => { setUser(u); nav('/portal', { replace: true }); });
+  const s = useSubmit(() => api<{ user: User }>('/auth/signup', { body: f }), ({ user: u }) => { setUser(u); nav(next, { replace: true }); });
   if (user) return <Navigate to={homeFor(user)} replace />;
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   return (
@@ -107,7 +109,7 @@ export function Forgot() {
       <form className="auth-card" onSubmit={s.run} noValidate>
         <div><h1>Reset your password</h1><p className="sub">We will email a link to your registered address. It works once, within 60 minutes.</p></div>
         {s.error ? <ErrorNote error={s.error} /> : null}
-        {sent ? <div className="ok-note" role="status">{sent} <Link to="/mailbox" style={{ textDecoration: 'underline' }}>Open the demo mailbox</Link></div> : null}
+        {sent ? <div className="ok-note" role="status">{sent} {import.meta.env.DEV ? <Link to="/mailbox" style={{ textDecoration: 'underline' }}>Open the demo mailbox</Link> : null}</div> : null}
         <Field label="Email" error={s.fields.email}>{(id) => <input id={id} className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />}</Field>
         <button className="btn primary" disabled={s.busy}>{s.busy ? 'Sending…' : 'Send reset link'}</button>
         <Link to="/login" className="muted">← Back to sign in</Link>

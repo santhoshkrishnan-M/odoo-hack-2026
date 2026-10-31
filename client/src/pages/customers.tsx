@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, qs, type Page } from '../api';
-import { BackLink, Empty, ErrorNote, Field, InvStatus, KeyValues, Loading, Modal, Money, PageHead, Pager, Panel, SubStatus, useApi, useQueryState, useSubmit } from '../components';
+import { ActivityList, BackLink, Empty, ErrorNote, Field, InvStatus, KeyValues, Loading, Modal, Money, PageHead, Pager, Panel, SubStatus, useApi, useQueryState, useSubmit, type ActivityRow } from '../components';
 import { count, money, PERIOD_WORD } from '../format';
 
-interface Customer { id: number; name: string; email: string; phone: string; company: string; address: string; activeSubscriptions?: number; balance?: number; hasPortal?: number }
+interface Customer { id: number; name: string; email: string; phone: string; company: string; address: string; gstin?: string; activity?: ActivityRow[]; activeSubscriptions?: number; balance?: number; hasPortal?: number }
 
 export function CustomersPage() {
   const [p, set] = useQueryState();
@@ -49,7 +49,7 @@ export function CustomersPage() {
 }
 
 function CustomerModal({ customer, onClose, onSaved }: { customer?: Customer; onClose: () => void; onSaved: (id: number) => void }) {
-  const [f, setF] = useState({ name: customer?.name ?? '', email: customer?.email ?? '', phone: customer?.phone ?? '', company: customer?.company ?? '', address: customer?.address ?? '' });
+  const [f, setF] = useState({ name: customer?.name ?? '', email: customer?.email ?? '', phone: customer?.phone ?? '', company: customer?.company ?? '', address: customer?.address ?? '', gstin: customer?.gstin ?? '' });
   const s = useSubmit(async () => {
     if (customer) { await api(`/customers/${customer.id}`, { method: 'PUT', body: f }); return { id: customer.id }; }
     return api<{ id: number }>('/customers', { body: f });
@@ -62,6 +62,7 @@ function CustomerModal({ customer, onClose, onSaved }: { customer?: Customer; on
         <div className="form-grid">
           <Field label="Contact name" error={s.fields.name}>{(id) => <input id={id} className="input" value={f.name} onChange={set('name')} />}</Field>
           <Field label="Company">{(id) => <input id={id} className="input" value={f.company} onChange={set('company')} />}</Field>
+          <Field label="GSTIN" error={s.fields.gstin}>{(id) => <input id={id} className="input mono" maxLength={15} value={f.gstin} onChange={set('gstin')} />}</Field>
           <Field label="Email" error={s.fields.email} hint="Invoices are sent here">{(id) => <input id={id} type="email" className="input" value={f.email} onChange={set('email')} />}</Field>
           <Field label="Phone">{(id) => <input id={id} className="input" value={f.phone} onChange={set('phone')} />}</Field>
           <Field label="Billing address" wide>{(id) => <textarea id={id} className="input" value={f.address} onChange={set('address')} />}</Field>
@@ -125,7 +126,9 @@ export function CustomerDetailPage() {
           </Panel>
         </div>
         <Panel title="Contact">
-          <KeyValues items={[['Name', cu.name], ['Company', cu.company || '—'], ['Email', cu.email], ['Phone', cu.phone || '—'], ['Address', cu.address || '—']]} />
+          <KeyValues items={[['Name', cu.name], ['Company', cu.company || '—'], ['GSTIN', cu.gstin || '—'], ['Email', cu.email], ['Phone', cu.phone || '—'], ['Address', cu.address || '—']]} />
+          <h3 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 8px' }}>Recent activity</h3>
+          <ActivityList rows={cu.activity ?? []} compact />
         </Panel>
       </div>
       {editing ? <CustomerModal customer={cu} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); c.reload(); }} /> : null}

@@ -33,7 +33,7 @@ export const monthLabel = (ym: string) => monthShort.format(new Date(`${ym}-01T0
 
 export const PERIOD_WORD: Record<string, string> = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' };
 export const PERIOD_ADJ: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
-export const METHOD_LABEL: Record<string, string> = { bank_transfer: 'Bank transfer', card: 'Card', upi: 'UPI', cash: 'Cash', cheque: 'Cheque' };
+export const METHOD_LABEL: Record<string, string> = { bank_transfer: 'Bank transfer', card: 'Card', upi: 'UPI', cash: 'Cash', cheque: 'Cheque', netbanking: 'Net banking', wallet: 'Wallet', credit_note: 'Credit note' };
 export const TERMS_LABEL: Record<number, string> = { 0: 'Due on receipt', 15: '15 days', 30: '30 days', 45: '45 days' };
 
 export const SUB_STATUS: Record<string, { label: string; tone: '' | 'pos' | 'neg' | 'warn' }> = {

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
+import { startLive, stopLive } from './live';
 
 export type Role = 'admin' | 'staff' | 'customer';
 export interface User { id: number; email: string; name: string; role: Role; customerId: number | null }
@@ -26,6 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (user) startLive(); else stopLive();
+    return () => stopLive();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return <Ctx.Provider value={{ user, ready, refresh, setUser, logout }}>{children}</Ctx.Provider>;
 }
 

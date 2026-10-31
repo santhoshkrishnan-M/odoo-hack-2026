@@ -12,6 +12,8 @@ import { InvoiceDetailPage, InvoicesPage, PaymentsPage } from './pages/invoices'
 import { CustomerDetailPage, CustomersPage } from './pages/customers';
 import { DiscountFormPage, DiscountsPage, PlansPage, ProductFormPage, ProductsPage, TaxesPage, TeamPage, TemplateFormPage, TemplatesPage } from './pages/catalog';
 import { PortalHome, PortalInvoice, PortalInvoices, PortalProfile, PortalSubscription } from './pages/portal';
+import { PortalPlans, PublicPlans } from './pages/plans';
+import { EmailLogPage, SettingsPage } from './pages/admin';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -23,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/forgot-password" element={<Forgot />} />
           <Route path="/reset-password" element={<Reset />} />
           <Route path="/mailbox" element={<Mailbox />} />
+          <Route path="/pricing" element={<PublicPlans />} />
           <Route element={<RequireRole roles={['admin', 'staff']}><StaffLayout /></RequireRole>}>
             <Route index element={<DashboardPage />} />
             <Route path="subscriptions" element={<SubscriptionsPage />} />
@@ -46,6 +49,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="discounts/new" element={<RequireRole roles={['admin']}><DiscountFormPage /></RequireRole>} />
             <Route path="discounts/:id" element={<RequireRole roles={['admin']}><DiscountFormPage /></RequireRole>} />
             <Route path="team" element={<RequireRole roles={['admin']}><TeamPage /></RequireRole>} />
+            <Route path="settings" element={<RequireRole roles={['admin']}><SettingsPage /></RequireRole>} />
+            <Route path="emails" element={<RequireRole roles={['admin']}><EmailLogPage /></RequireRole>} />
           </Route>
           <Route path="/portal" element={<RequireRole roles={['customer']}><PortalLayout /></RequireRole>}>
             <Route index element={<PortalHome />} />
@@ -53,6 +58,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="invoices" element={<PortalInvoices />} />
             <Route path="invoices/:id" element={<PortalInvoice />} />
             <Route path="profile" element={<PortalProfile />} />
+            <Route path="plans" element={<PortalPlans />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

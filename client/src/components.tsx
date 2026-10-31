@@ -3,13 +3,21 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError, qs } from './api';
 import { count, INV_STATUS, money, SUB_STATUS } from './format';
 import { Icon } from './icons';
+import { ago, useLiveVersion, useNow } from './live';
 
 /* ---------- data loading ---------- */
-export function useApi<T>(path: string | null) {
+/**
+ * Loads `path` and keeps it current: whenever the live stream reports a change, the data is fetched again
+ * in the background (no spinner, no layout jump). Pass `{ live: false }` for one-off reads.
+ */
+export function useApi<T>(path: string | null, opts: { live?: boolean } = {}) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const liveVersion = useLiveVersion();
+  const follow = opts.live !== false;
+  const first = useRef(true);
   useEffect(() => {
     if (!path) return;
     let live = true;
@@ -20,8 +28,42 @@ export function useApi<T>(path: string | null) {
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [path, tick]);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!path || !follow) return;
+    let live = true;
+    api<T>(path).then((d) => { if (live) { setData(d); setError(null); } }).catch(() => undefined);
+    return () => { live = false; };
+  }, [liveVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const reload = useCallback(() => setTick((t) => t + 1), []);
   return { data, error, loading, reload };
+}
+
+/* ---------- activity ---------- */
+export interface ActivityRow { id?: number; createdAt: string; message: string; type: string; actorName?: string }
+export function ActivityList({ rows, empty = 'Nothing has happened here yet.', compact }: { rows: ActivityRow[]; empty?: string; compact?: boolean }) {
+  const now = useNow();
+  if (!rows.length) return <div className="empty">{empty}</div>;
+  return (
+    <ol className={`activity${compact ? ' compact' : ''}`}>
+      {rows.map((r, i) => (
+        <li key={`${r.id ?? i}-${r.createdAt}`} className={`act act-${r.type.split('.')[0]}`}>
+          <span className="act-dot" aria-hidden="true" />
+          <div className="act-body">
+            <div className="act-msg">{r.message}</div>
+            <div className="act-meta"><time dateTime={r.createdAt} title={new Date(r.createdAt).toLocaleString('en-IN')}>{ago(r.createdAt, now)}</time>
+              {r.actorName ? <> · {r.actorName}</> : null}</div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function ExportLink({ what, query }: { what: 'invoices' | 'subscriptions' | 'payments'; query: Record<string, string | number | null | undefined> }) {
+  const params = { ...query };
+  delete params.page;
+  return <a className="btn" href={`/api/reports/export/${what}${qs(params)}`} download>Export CSV</a>;
 }
 
 /** Query-string state for list screens, so filters survive reloads and links. */
@@ -62,7 +104,8 @@ export function SubStatus({ status }: { status: string }) {
   const s = SUB_STATUS[status] ?? { label: status, tone: '' };
   return <span className={`pill ${s.tone}`}>{s.label}</span>;
 }
-export function InvStatus({ status, overdue }: { status: string; overdue?: boolean | number }) {
+export function InvStatus({ status, overdue, kind }: { status: string; overdue?: boolean | number; kind?: string }) {
+  if (kind === 'credit_note') return <span className="pill">{status === 'paid' ? 'Credit applied' : status === 'cancelled' ? 'Cancelled' : 'Credit note'}</span>;
   if (overdue) return <span className="pill neg">Overdue</span>;
   const s = INV_STATUS[status] ?? { label: status, tone: '' };
   return <span className={`pill ${s.tone}`}>{s.label}</span>;
@@ -163,7 +206,9 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
     return () => d?.close();
   }, []);
   return (
-    <dialog ref={ref} className={`modal${wide ? ' wide' : ''}`} onClose={onClose} onCancel={onClose} aria-label={title}>
+    // React StrictMode (dev) unmounts and remounts once: the cleanup's close() then fires a late 'close' event while the
+    // dialog is already open again. Only treat the event as a real close when the dialog is actually closed.
+    <dialog ref={ref} className={`modal${wide ? ' wide' : ''}`} onClose={() => { if (!ref.current?.open) onClose(); }} aria-label={title}>
       <header>
         <h2>{title}</h2>
         <button className="btn ghost icon" onClick={onClose} aria-label="Close"><Icon.close /></button>

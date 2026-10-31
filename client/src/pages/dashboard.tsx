@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, qs } from '../api';
 import { Bars } from '../charts';
-import { ErrorNote, Loading, Money, PageHead, Panel, useApi, useQueryState } from '../components';
+import { ActivityList, ErrorNote, Loading, Money, PageHead, Panel, useApi, useQueryState, type ActivityRow } from '../components';
+import { ago, useNow } from '../live';
 import { addDaysIso, count, dateWords, monthLabel, PERIOD_ADJ, rupees, SUB_STATUS, todayIso } from '../format';
 
 interface Dashboard {
@@ -12,6 +13,9 @@ interface Dashboard {
   byPlan: { id: number; name: string; period: string; active: number; mrr: number }[];
   topOverdue: { id: number; number: string; dueDate: string; balance: number; customerName: string; customerId: number; daysLate: number }[];
   ageing: { key: string; label: string; count: number; amount: number }[];
+  arr: number; arpa: number; refunds: number; credited: number; churnRate: number; netNewMrr: number; prevNetNewMrr: number;
+  mrrMonths: { month: string; opening: number; new: number; expansion: number; reactivation: number; contraction: number; churn: number; closing: number; churned: number }[];
+  lastRun: { finishedAt: string; ok: number; summary: Record<string, number> } | null;
 }
 
 const RANGES: Record<string, { label: string; from: (t: string) => string }> = {
@@ -39,6 +43,9 @@ export function DashboardPage() {
   const { data: d, error, reload } = useApi<Dashboard>(`/reports/dashboard${qs({ from, to: today, planId })}`);
   const { data: plans } = useApi<{ rows: { id: number; name: string }[] }>('/plans');
   const [billing, setBilling] = useState<string | null>(null);
+  const feed = useApi<{ rows: ActivityRow[] }>('/admin/activity?limit=20');
+  const now = useNow();
+  const [running, setRunning] = useState(false);
 
   const chart = useMemo(() => {
     if (!d) return null;
@@ -53,13 +60,15 @@ export function DashboardPage() {
     };
   }, [d, from, today]);
 
-  const runBilling = async () => {
-    setBilling('Billing…');
+  const runAutomation = async () => {
+    setRunning(true);
+    setBilling('Running the daily automation…');
     try {
-      const r = await api<{ created: number; closed: number }>('/billing/run', { body: {} });
-      setBilling(`${count(r.created)} draft invoices created${r.closed ? `, ${count(r.closed)} fixed-term subscriptions closed` : ''}.`);
+      const r = await api<{ created: number; closed: number; confirmed: number; sent: number; reminders: number; dunningClosed: number }>('/billing/automation', { body: {} });
+      setBilling(`${count(r.created)} invoices created, ${count(r.confirmed)} confirmed, ${count(r.sent)} emailed, ${count(r.reminders)} payment reminders sent` +
+        `${r.closed + r.dunningClosed ? `, ${count(r.closed + r.dunningClosed)} subscriptions closed` : ''}.`);
       reload();
-    } catch (e) { setBilling((e as Error).message); }
+    } catch (e) { setBilling((e as Error).message); } finally { setRunning(false); }
   };
 
   if (error) return <ErrorNote error={error} onRetry={reload} />;
@@ -75,11 +84,14 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHead title="Overview" sub={finding} actions={
-        d.dueForBilling > 0
-          ? <button className="btn primary" onClick={runBilling}>Bill {count(d.dueForBilling)} due subscriptions</button>
-          : d.draftInvoices > 0 ? <button className="btn primary" onClick={() => nav('/invoices?status=draft')}>Review {count(d.draftInvoices)} draft invoices</button> : null
-      } />
+      <PageHead title="Overview" sub={finding} actions={<>
+        {d.draftInvoices > 0 ? <button className="btn" onClick={() => nav('/invoices?status=draft')}>Review {count(d.draftInvoices)} drafts</button> : null}
+        <button className="btn primary" onClick={runAutomation} disabled={running}>{d.dueForBilling > 0 ? `Bill ${count(d.dueForBilling)} due now` : 'Run automation now'}</button>
+      </>} />
+      <p className="stamp" style={{ margin: '-12px 0 16px' }}>
+        {d.lastRun ? <>Automation last ran {ago(d.lastRun.finishedAt, now)}{d.lastRun.ok ? '' : ' and failed'} · </> : 'Automation has not run yet · '}
+        billing, confirmation, emails, reminders and renewals run by themselves every day
+      </p>
       {billing ? <p className="ok-note" role="status" style={{ marginTop: -8, marginBottom: 12 }}>{billing}</p> : null}
       <div className="filters">
         <div className="segmented" role="group" aria-label="Period">
@@ -95,7 +107,7 @@ export function DashboardPage() {
 
       <div className="kpis">
         <div className="kpi lead"><div className="kpi-label">Monthly recurring revenue</div><div className="kpi-value num">{rupees(d.mrr)}</div>
-          <div className="delta">from {count(d.activeSubscriptions)} active subscriptions, before tax</div></div>
+          <div className="delta">{count(d.activeSubscriptions)} active · <span className={d.netNewMrr < 0 ? 'neg-text' : ''}>{d.netNewMrr >= 0 ? '+' : '−'}{rupees(Math.abs(d.netNewMrr))}</span> this month</div></div>
         <div className="kpi"><div className="kpi-label">Collected</div><div className="kpi-value num">{rupees(d.revenue)}</div>
           <div className="delta">{count(d.paymentCount)} payments{collectedShare !== null ? ` · ${collectedShare.toFixed(1)}% of ${rupees(d.invoiced)} invoiced` : ''}</div></div>
         <div className="kpi"><div className="kpi-label">Still owed</div><div className="kpi-value num">{rupees(d.outstanding)}</div>
@@ -104,8 +116,26 @@ export function DashboardPage() {
           <div className="delta">{count(d.overdueCount)} invoices past their due date</div></div>
       </div>
 
+      <div className="kpis secondary" style={{ marginTop: 'var(--gap)' }}>
+        <div className="kpi"><div className="kpi-label">Annual run rate</div><div className="kpi-value num">{rupees(d.arr)}</div><div className="delta">MRR × 12</div></div>
+        <div className="kpi"><div className="kpi-label">Average per subscription</div><div className="kpi-value num">{rupees(d.arpa)}</div><div className="delta">per month</div></div>
+        <div className="kpi"><div className="kpi-label">Revenue churn this month</div><div className={`kpi-value num${d.churnRate ? '' : ' zero'}`}>{d.churnRate.toFixed(1)}%</div>
+          <div className="delta">{count(d.mrrMonths.at(-1)?.churned ?? 0)} subscriptions closed</div></div>
+        <div className="kpi"><div className="kpi-label">Credited and refunded</div><div className={`kpi-value num${d.credited ? '' : ' zero'}`}>{rupees(d.credited)}</div>
+          <div className="delta">{rupees(d.refunds)} paid back in this period</div></div>
+      </div>
+
+      <div className="cols-2" style={{ marginTop: 'var(--gap)', marginBottom: 'var(--gap)' }}>
+        <Panel title="MRR movements" meta="per month: new, growth, losses" className="flush">
+          <MrrTable months={d.mrrMonths.slice(-6)} />
+        </Panel>
+        <Panel title="Live activity" meta={<span className="stamp">updates by itself</span>} className="feed-panel">
+          <ActivityList rows={feed.data?.rows ?? []} compact empty="Waiting for the first event…" />
+        </Panel>
+      </div>
+
       <div className="cols-2" style={{ marginBottom: 'var(--gap)' }}>
-        <Panel title="Collected per month" meta="Payments received, including tax">
+        <Panel title="Collected per month" meta="Payments received less refunds, including tax">
           <Bars labels={chart.labels} values={chart.values} highlight={chart.highlight} format={rupeeAxis} annotations={chart.annotations}
             label={`Payments collected per month, ${chart.labels[0]} to ${chart.labels.at(-1)}`} height={262} />
         </Panel>
@@ -173,5 +203,31 @@ export function DashboardPage() {
         </Panel>
       </div>
     </>
+  );
+}
+
+function MrrTable({ months }: { months: Dashboard['mrrMonths'] }) {
+  const signed = (v: number) => (v === 0 ? <span className="muted">—</span> : <span className={`num${v < 0 ? ' neg-text' : ''}`}>{v > 0 ? '+' : '−'}{rupees(Math.abs(v))}</span>);
+  return (
+    <div className="table-wrap">
+      <table className="mrr-table">
+        <thead><tr><th>Month</th><th className="n">New</th><th className="n hide-sm" title="Upgrades minus downgrades and pauses">Changes</th><th className="n">Churn</th><th className="n">Net</th><th className="n">MRR</th></tr></thead>
+        <tbody>
+          {months.map((m) => {
+            const net = m.closing - m.opening;
+            return (
+              <tr key={m.month}>
+                <td>{monthLabel(m.month)} {m.month.slice(2, 4)}</td>
+                <td className="n">{signed(m.new + m.reactivation)}</td>
+                <td className="n hide-sm">{signed(m.expansion + m.contraction)}</td>
+                <td className="n">{signed(m.churn)}</td>
+                <td className="n strong">{signed(net)}</td>
+                <td className="n num">{rupees(m.closing)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

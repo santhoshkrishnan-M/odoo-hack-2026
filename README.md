@@ -1,174 +1,127 @@
-# Subscription Management & Billing System
+# Brightloop Billing — Subscription Management
 
-A comprehensive, production-grade subscription management and recurring billing platform built for modern B2B/B2C SaaS and service enterprises. The application unifies product catalogues, customized recurring plans, quotation-to-subscription workflows, automated billing runs with zero-collision idempotency, flexible discount rules, multi-method payments, accounts receivable tracking, and customer self-service.
+A complete, working subscription business system in the style of Odoo Subscriptions: products and variants, recurring plans,
+quotation templates, quotations that become subscriptions, automatic recurring invoices with GST and discounts, online
+payments, upgrades and downgrades with proration, credit notes and refunds, dunning, a self-service customer portal,
+a public pricing page, live updates across every open screen, and a finance dashboard with MRR, churn and receivables.
 
----
-
-## Key Highlights & Business Capabilities
-
-### 1. Multi-Tier Role-Based Access Control (RBAC)
-- **Role Isolation**: Strict separation across **Administrator**, **Staff Member**, and **Customer** roles enforced at the server route layer.
-- **Secure Authentication**: Sessions managed via secure `httpOnly`, `SameSite=Lax` cookies with `bcrypt`-hashed passwords.
-- **Self-Service Customer Portal**: Dedicated client portal (`/portal`) where customers can only access their own subscriptions, invoices, and payment receipts.
-- **Password Resilience**: Enforces strict password policies (>8 characters with mixed uppercase, lowercase, and special characters) and secure, single-use SHA-256 password reset tokens with automatic invalidation of old sessions.
-
-### 2. Product Catalogue & Dynamic Variants
-- **Products**: Support for services and physical goods with configurable cost price, base sales price, description notes, and applicable tax classifications.
-- **Variants & Surcharges**: Dynamic product variants (e.g., brand editions, regional options) that calculate automatic surcharges applied directly to the line unit price.
-
-### 3. Flexible Recurring Subscription Plans
-- **Billing Intervals**: Configurable daily, weekly, monthly, and yearly recurring periods.
-- **Policy Controls**:
-  - Minimum commitment quantity rules.
-  - Plan availability date windows (start and end validity).
-  - Configurable switches for auto-closing at expiration, early termination, mid-cycle pausing, and renewals.
-
-### 4. Quotation Pipeline & Subscription Lifecycle
-- **Quotation Templates**: Reusable templates with default plans, line items, and validity durations.
-- **Standardized Numbering**: Automated document sequencing (e.g., `SUB/2026/00001`).
-- **Enforced State Machine**: Formal transition validation:
-  $$\text{Draft} \longrightarrow \text{Quotation} \longrightarrow \text{Confirmed} \longrightarrow \text{Active} \longleftrightarrow \text{Paused} \longrightarrow \text{Closed}$$
-- Expiration safeguards prevent confirmation of expired quotations.
-
-### 5. Automated Recurring Billing Engine
-- **Atomic Catch-Up Runs**: One-click and automated billing cycles that identify all active subscriptions due for invoicing up to a given cut-off date.
-- **Guaranteed Idempotency**: Protected against double-billing via database-level unique indexing on `(subscription_id, period_start)`. Even concurrent billing executions cannot double-charge.
-- **Calendar Anchoring**: Periods correctly anchored to original subscription start dates (e.g., a subscription starting January 31 correctly bills February 28, then March 31).
-
-### 6. Dynamic Discount & Promotion Engine
-- **Flexible Rules**: Fixed cash deductions or percentage discounts.
-- **Conditional Qualification**: Minimum subtotal thresholds, minimum purchase quantities, date ranges, and maximum usage caps.
-- **Scope Targeting**: Universal subscription-wide discounts or specific product-line targeting.
-- **Automatic Lifecycle Reversals**: Cancelling an unpaid invoice automatically restores discount coupon usage quotas.
-
-### 7. Invoice Lifecycle & Tax Calculations
-- **Document Sequence**: Standardized invoice numbering (e.g., `INV/2026/00001`).
-- **Audit States**: `Draft` $\rightarrow$ `Confirmed` $\rightarrow$ `Paid` (or `Cancelled`).
-- **Tax & Discount Math**: Accurate line-level calculation (discount applied before tax calculation) rounded to exact whole paise to prevent precision drift.
-- **Print & Delivery**: Clean, print-ready invoices and simulated email delivery for dispatch logs.
-
-### 8. Payment Recording & Accounts Receivable (AR)
-- **Multi-Method Tracking**: Support for UPI, Bank Transfer, Credit/Debit Card, Cheque, and Cash payments against confirmed invoices.
-- **Payment Allocation**: Granular partial payment support with strict validation preventing overpayments.
-- **Aging & Overdue Tracking**: Real-time identification of overdue invoices based on configured payment terms (Immediate, Net-15, Net-30, Net-45).
-
-### 9. High-Performance Executive Dashboard
-- **Instant Response Times**: Sub-100 ms query performance even with thousands of active subscriptions and historical invoices.
-- **Key Metrics**: Monthly Recurring Revenue (MRR), total collected revenue, outstanding accounts receivable, receivables aging buckets (0–30, 31–60, 61–90, 90+ days), longest overdue accounts, and revenue breakdown by plan.
+Stack: **React 19 + TypeScript + Vite** · **Node 22 + Express 5** · **PostgreSQL** (embedded PGlite locally, Neon or any Postgres in production).
 
 ---
 
-## System Architecture
+## Run it (any editor, any OS)
 
-```
-client/ (React 19 + TypeScript + Vite)
-   │
-   └── HTTP JSON (/api) with httpOnly session cookies
-         │
-         ▼
-server/ (Express 5 + TypeScript)
-   ├── routes/     Thin validation and authorization layer (Zod schemas)
-   ├── services/   Transactional SQL business operations
-   ├── domain/     Pure, zero-dependency domain models & business rules
-   └── db/         SQLite engine (better-sqlite3) with WAL mode & foreign keys
-```
-
-### Technical Design Principles
-- **Domain-Driven Design (DDD)**: Business logic, discount calculations, tax formulas, password validation, and billing periods reside in pure domain modules tested independently of database or HTTP dependencies.
-- **Zero Floating-Point Drift**: All currency values are stored and calculated as integer paise (1 INR = 100 paise), avoiding JavaScript floating-point errors.
-- **Fast Embedded Persistence**: Utilizes SQLite via `better-sqlite3` configured with Write-Ahead Logging (WAL) and foreign key constraints for fast local execution without external database overhead.
-
----
-
-## Getting Started
-
-### Prerequisites
-- **Node.js**: Version 22.0.0 or higher
-- **npm**: Version 10 or higher
-
-### Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/santhoshkrishnan-M/odoo-hack-2026.git
-   cd odoo-hack-2026
-   ```
-
-2. **Install project dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Initialize and seed the database**:
-   ```bash
-   npm run seed
-   ```
-   *This initializes `data/brightloop.db` and populates realistic demo records including products, plans, tax categories, subscriptions, and historical invoices.*
-
-4. **Launch the development environment**:
-   ```bash
-   npm run dev
-   ```
-   - **Web Application**: `http://localhost:5173`
-   - **Backend API**: `http://localhost:3000/api`
-   - **Development Mailbox**: `http://localhost:5173/mailbox` *(captures password reset and invoice emails in development)*
-
----
-
-## Production Deployment
-
-To compile and serve the optimized single-port production build:
+Needs **Node.js 22 or newer** (`node -v`). Nothing else: no database server, no native build tools, no accounts.
 
 ```bash
-# Build the client bundle
-npm run build
-
-# Start the unified production server
-npm run start
+npm install
+npm run dev
 ```
-The server will be reachable at `http://localhost:3000`.
 
-### Environment Configuration
-The application supports the following environment variables:
+Open **http://localhost:5173**. The first start creates a demo company (1,000 subscriptions, a year of invoices and payments)
+in `data/pglite/`; this takes about a minute, and the sign-in page says so until it is ready.
 
-| Variable | Description | Default |
+| Role | Email | Password |
 | --- | --- | --- |
-| `PORT` | Web server listening port | `3000` |
-| `DB_FILE` | Relative or absolute path to the SQLite database file | `data/brightloop.db` |
-| `SEED_SUBSCRIPTIONS` | Number of synthetic subscriptions generated on initial seed | `2400` |
-| `DEV_MAILBOX` | Enable virtual mailbox interface in production mode (`1` = enabled) | `0` (disabled) |
+| Admin | admin@brightloop.test | Admin!pass1 |
+| Staff | staff@brightloop.test | Staff!pass1 |
+| Customer (portal) | customer@brightloop.test | Customer!1 |
 
----
+Try it live: open the app as **admin** in one browser window and as the **customer** in a private window. Order a plan in the
+customer's *Browse plans* and pay it (the test gateway); the admin's overview shows the payment within two seconds, without reloading.
 
-## User Roles & Evaluation Access
-
-The application includes three standard roles:
-
-1. **Administrator**: Full system management, catalog configuration, discount rules, team user management, billing execution, and finance analytics.
-2. **Staff**: Operational workflows including quotation creation, customer management, invoice management, payment logging, and dashboard viewing.
-3. **Customer**: Self-service portal access restricted strictly to their individual subscriptions, invoices, and payments.
-
-> **Evaluation Quick Fill**: When running in development mode, the sign-in page features quick-select buttons for each role to facilitate rapid testing and review. New customer accounts can also be created on-demand via the `/signup` screen.
-
----
-
-## Quality Assurance & Testing
-
-The platform includes a test suite covering pure domain math, API routes, authorization boundaries, billing idempotency, and query response times.
+Other commands:
 
 ```bash
-# Execute test suite
-npm test
-
-# Run TypeScript type verification
+npm run build && npm start   # production build on one port: http://localhost:3000
+npm run seed                 # rebuild the demo data (SEED_SUBSCRIPTIONS=2400 npm run seed for more)
+npm test                     # 128 tests incl. a 3,000-subscription performance check (~3 min)
+npm run test:quick           # the same without the performance check (~30 s)
 npm run typecheck
 ```
 
----
+To start again from scratch, stop the app and delete the `data/` folder.
 
-## Security Practices
+Configuration is optional and lives in `.env` (copy `.env.example`): a Postgres URL, Razorpay keys, SMTP, the public URL.
 
-- **Sanitized Inputs**: All incoming API requests are validated against strict Zod schemas before touching service layers.
-- **Session Protection**: Authentication tokens are stored inside tamper-proof, HTTP-only session cookies.
-- **Role Isolation**: Strict server-side checks verify customer ownership of all accessed resources, preventing horizontal privilege escalation.
-- **Secret Hygiene**: Sensitive credentials, production secrets, and private access keys are excluded from version control.
+## What it does
+
+**Catalogue (admin).** Products (service/goods, sales and cost price, notes, tax) with variants that add to the price
+(e.g. Brand: Odoo +₹560). Plans with price per day/week/month/year, minimum quantity, availability window and the rules
+auto-close at end date, closable early, pausable, renewable. Taxes. Discount rules: fixed or %, minimum amount or quantity,
+date window, usage limit, for chosen products or subscriptions — applied automatically while invoicing.
+
+**Selling.** Quotation templates (plan, lines, validity, contract length). Quote a customer in two clicks; the customer
+accepts in their portal. Lifecycle Draft → Quotation → Confirmed → Active ⇄ Paused → Closed, numbered `SUB/2026/00001`.
+Templates marked *Sell online* appear on the public **/pricing** page and in the portal: customers order and pay themselves,
+and the subscription starts the moment the first invoice is paid.
+
+**Running subscriptions.** Upgrade or downgrade quantities and products mid-period: an extra invoice for the prorated
+increase, or a prorated credit note for a decrease (applied to what is owed, refunded if already paid). Pause/resume,
+renew, and close with a reason (*Too expensive*, *Switched to a competitor*…) that feeds churn reporting. Every record has a
+full history (who did what, when).
+
+**Billing day, automatically.** Every day (Vercel Cron in production, an hourly timer on a normal server, or *Run now*):
+bill every due period — catching up missed ones, never twice (advisory lock + unique index) — confirm and email the invoices,
+send payment reminders 1/7/14 days after the due date, optionally close subscriptions unpaid for N days (dunning), send
+renewal reminders before end dates, expire stale quotations, and clean up. All configurable in *Settings & automation*.
+
+**Money.** Invoices with lines, GST and discounts, Draft → Confirmed → Paid, print/PDF with your company and GSTIN details.
+Manual payments (bank transfer, UPI, card, cash, cheque) with partials and no overpayment. **Online payment** from the portal
+through **Razorpay Checkout** (UPI, cards, net banking, wallets) with signature verification and a webhook — or the built-in
+test gateway when no keys are set. Credit notes (`CN/2026/00001`) and refunds. CSV export of invoices, subscriptions and payments.
+
+**Live.** One Server-Sent Events stream per signed-in browser. Every change writes to the activity log; each server instance
+polls it every 2 s and pushes new entries to its browsers, so lists, totals and dashboards refresh themselves and important
+events pop up as notifications. Works on one server or many serverless instances; browsers resume from the last event after
+a reconnect. Customers only ever receive their own events.
+
+**Finance dashboard.** MRR, ARR, average per subscription, revenue churn, net new MRR, an MRR bridge per month (new,
+expansion, contraction, churn), collections per month, receivables ageing, longest overdue, revenue by plan, live activity —
+filterable by period and plan, under a second with thousands of subscriptions.
+
+**Roles and security.** Admin (everything, team, settings, email log), staff (day-to-day; catalogue read-only), customers
+(portal, own records only — others return 404). Passwords > 8 characters with upper, lower and special; bcrypt; httpOnly
+SameSite sessions; reset links single-use, 60 minutes, stored hashed. Rate limits on sign-in, sign-up and resets (in the
+database, so they hold across instances). Cross-site request guard, security headers, zod validation on every input,
+parameterised SQL everywhere, spreadsheet-formula-safe CSV.
+
+## Architecture
+
+```
+client/   React SPA. useApi() loads data and refetches when the live stream reports a change.
+server/
+  domain/    pure rules: passwords, money, billing periods, lifecycle, pricing (discount → tax per line)
+  services/  SQL + transactions: auth, subscriptions (incl. proration), billing, invoices (credit notes),
+             payments (Razorpay / test gateway / webhook), jobs (daily automation), reports, activity, mail, settings
+  routes/    thin Express routers: validate (zod), authorise, call a service
+  realtime.ts  the SSE stream
+  db/        schema (idempotent, versioned), connection (pg for Postgres, PGlite embedded), seed
+  index.ts   long-running server (API + web app + hourly automation)
+  vercel.ts  serverless entry (bundled to api/index.js by `npm run build`)
+```
+
+Money is integer paise; dates are `DATE`; periods are anchored to the start date (31 Jan → 28 Feb → 31 Mar).
+
+## Deploying
+
+**Docker (any VPS):** `docker compose up --build` runs the app with its own PostgreSQL on http://localhost:3000.
+
+**Vercel + Neon:**
+1. Create a Postgres database (e.g. Neon) and copy its *pooled* connection string.
+2. In a new Vercel project set `DATABASE_URL`, `CRON_SECRET` (any long random string) and `SETUP_SECRET`.
+   Optionally `RAZORPAY_*`, `SMTP_URL`, `MAIL_FROM`.
+3. `npm run build`, then `npx vercel deploy --prod` from this folder (or connect a Git repository). `api/index.js` is the bundled API; rebuild it after server changes.
+4. Load the demo company once: `curl -X POST "https://<your-app>/api/setup?key=<SETUP_SECRET>"` (only works on an empty database).
+   Or skip it and sign up, then make the first admin by setting `role = 'admin'` on that user in the database.
+
+The daily automation runs from Vercel Cron (`vercel.json`, 06:00 IST). Razorpay webhook URL: `https://<your-app>/api/webhooks/razorpay`
+(events `payment.captured`, `payment.failed`).
+
+## Assumptions
+
+- Prices are in Indian rupees; GST is a percentage added on top of each line. Product prices are per billing period of the plan.
+- Proration is by days left in the current billed period. Credit notes reverse tax in proportion to the original invoice.
+- Without SMTP, emails are recorded in the email log rather than delivered; without Razorpay keys, online payments use a clearly labelled test gateway.
+
+Built with the `superpowers` workflow (spec → plan → test-driven development → verification); the original spec and plan are in `docs/`.

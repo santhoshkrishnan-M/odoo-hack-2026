@@ -1,12 +1,14 @@
 {
-  "name": "subscription-management",
+  "name": "brightloop-billing",
   "private": true,
   "type": "module",
   "dependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",
     "express": "^5.3.0",
+    "nodemailer": "^7.0.13",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5",
@@ -14,15 +16,17 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/supertest": "^7.2.1",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
+    "esbuild": "^0.28.2",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
@@ -30,14 +34,17 @@
     "vitest": "^5.0.5"
   },
   "scripts": {
-    "dev": "concurrently -n api,web \"tsx watch server/src/index.ts --dev\" \"vite\"",
-    "build": "vite build",
+    "dev": "concurrently -n api,web -c blue,green \"tsx watch server/src/index.ts --dev\" \"vite\"",
+    "build": "vite build && node scripts/build-api.mjs",
     "start": "tsx server/src/index.ts",
     "seed": "tsx server/src/db/seed.ts",
     "test": "vitest run",
+    "test:quick": "vitest run --exclude server/test/perf.test.ts",
     "typecheck": "tsc -p ."
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "version": "2.0.0",
+  "description": "Subscription management (Odoo-style): plans, quotations, recurring invoices, online payments, live updates, daily automation."
 }

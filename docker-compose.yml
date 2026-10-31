@@ -1,0 +1,24 @@
+# docker compose up --build   →   http://localhost:3000
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: brightloop
+      POSTGRES_PASSWORD: brightloop
+      POSTGRES_DB: brightloop
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brightloop"]
+      interval: 5s
+      retries: 10
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgresql://brightloop:brightloop@db:5432/brightloop?sslmode=disable
+      APP_URL: http://localhost:3000
+      SEED_SUBSCRIPTIONS: "2400"
+    depends_on:
+      db: { condition: service_healthy }
+volumes:
+  pgdata:

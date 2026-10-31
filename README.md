@@ -105,7 +105,6 @@ The platform is designed as a decoupled full-stack architecture that can operate
 
 ```
 brightloop-billing/
-├── api/                  # Production serverless runtime entrypoint
 ├── client/               # React 19 single-page application
 │   ├── public/           # Static assets, branding, and chart utilities
 │   └── src/
@@ -202,7 +201,7 @@ System configuration is driven by environment variables. Defaults are provided f
 | `RAZORPAY_KEY_ID` | Razorpay public key. When blank, simulated sandbox gateway is active. | None |
 | `RAZORPAY_KEY_SECRET`| Razorpay private secret used for signature verification. | None |
 | `RAZORPAY_WEBHOOK_SECRET` | Secret key used to validate incoming payment webhooks. | None |
-| `SMTP_URL` | SMTP transport URL (e.g. `smtps://user:secret@smtp.example.com:465`). | None (Logged to internal outbox) |
+| `SMTP_URL` | SMTP transport URL (e.g. `smtps://smtp.example.com:465`). | None (Logged to internal outbox) |
 | `MAIL_FROM` | Default sender email address for system-generated correspondence. | `Brightloop Billing <billing@example.com>` |
 | `SCHEDULER` | Set to `off` to disable the internal scheduler when running external cron. | `on` |
 | `CRON_SECRET` | Bearer authentication token for securing external automation triggers. | None |

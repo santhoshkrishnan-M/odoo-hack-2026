@@ -21,11 +21,11 @@ npm run dev
 Open **http://localhost:5173**. The first start creates a demo company (1,000 subscriptions, a year of invoices and payments)
 in `data/pglite/`; this takes about a minute, and the sign-in page says so until it is ready.
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Admin | admin@brightloop.test | Admin!pass1 |
-| Staff | staff@brightloop.test | Staff!pass1 |
-| Customer (portal) | customer@brightloop.test | Customer!1 |
+| Role | Email |
+| --- | --- |
+| Admin | admin@brightloop.test |
+| Staff | staff@brightloop.test |
+| Customer (portal) | customer@brightloop.test |
 
 Try it live: open the app as **admin** in one browser window and as the **customer** in a private window. Order a plan in the
 customer's *Browse plans* and pay it (the test gateway); the admin's overview shows the payment within two seconds, without reloading.

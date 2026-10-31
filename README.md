@@ -2,6 +2,8 @@
 
 Brightloop Billing is an enterprise-grade subscription and billing management platform designed for SaaS and recurring-service businesses. Built following the design patterns of modern ERP subscription modules (such as Odoo Subscriptions), the system unifies product catalog configuration, quotation generation, automated recurring billing, discount processing, online and manual payment reconciliation, a customer self-service portal, real-time activity feeds, and financial analytics into a single application.
 
+> **Hackathon Submission**: See [docs/SUBMISSION.md](docs/SUBMISSION.md) for the complete Odoo Hackathon 2026 feature mapping, architectural summary, and quick evaluation guide.
+
 ---
 
 ## Technical Stack and Architecture
